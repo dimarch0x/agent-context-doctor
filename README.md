@@ -2,6 +2,10 @@
 
 # Agent Context Doctor
 
+[![CI](https://github.com/dimarch0x/agent-context-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/dimarch0x/agent-context-doctor/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 Линтер файлов контекста ИИ-агентов: проверяет `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`,
 `SKILL.md` и каталоги правил `.agents/rules/*.md` / `.claude/rules/*.md` против
 реального репозитория и находит то, что ломает работу агентов.
