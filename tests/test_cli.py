@@ -57,6 +57,11 @@ class CliTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["error"], 1)
             self.assertTrue(payload["issues"][0]["message"].startswith("путь не существует"))
 
+    def test_version_is_semver(self):
+        from agctx import __version__
+
+        self.assertRegex(__version__, r"^\d+\.\d+\.\d+$")
+
     def test_missing_path_returns_three(self):
         code, _ = self.run_cli("scan", "/nonexistent/place/at/all")
         self.assertEqual(code, 3)
