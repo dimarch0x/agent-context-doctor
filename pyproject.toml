@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-context-doctor"
+version = "0.1.0"
+description = "Linter for AI agent context files: AGENTS.md, CLAUDE.md, SKILL.md"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Dmitry" }]
+keywords = ["agents", "agents.md", "mcp", "llm", "linter", "context"]
+
+[project.scripts]
+agctx = "agctx.cli:main"
+
+[tool.setuptools]
+packages = ["agctx"]
