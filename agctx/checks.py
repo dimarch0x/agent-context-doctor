@@ -199,6 +199,8 @@ class _ScanCache:
         if scope in self._manifest_bases:
             return self._manifest_bases[scope]
         bases: list[Path] = []
+        if scope.name == "rules" and scope.parent != self.root.parent:
+            bases.append(scope.parent)
         for fn in ("package.json", "pyproject.toml", "composer.json", "Cargo.toml", "go.mod"):
             m = self.nearest(scope, fn)
             if m and m.parent != scope and m.parent not in bases:
@@ -611,7 +613,7 @@ def check_version_drift(
                 continue
             line = line_raw.lower()
             in_header_zone = (
-                f.kind in {"agents", "claude"}
+                f.kind in {"agents", "claude", "gemini", "rules"}
                 and lineno <= doc.body_start + 20
                 and file_mentions_project
                 and not RUNTIME_VER_RE.search(line_raw)
@@ -654,8 +656,8 @@ def check_version_drift(
                             )
                         )
 
-        # 2. Версии рантайма / стека в AGENTS.md / CLAUDE.md
-        if f.kind in {"agents", "claude"} and manifest.parent == f.scope:
+        # 2. Версии рантайма / стека в инструкциях проекта
+        if f.kind in {"agents", "claude", "gemini", "rules"} and manifest.parent == f.scope:
             for lineno, line_raw in enumerate(lines, start=1):
                 if lineno <= doc.body_start or doc.fence_langs[lineno - 1] is not None:
                     continue
@@ -823,7 +825,9 @@ def check_skill_frontmatter(
 def _short_label(cf: ContextFile, root: Path) -> str:
     try:
         rel = cf.path.relative_to(root)
-        if len(rel.parts) >= 2:
+        if len(rel.parts) >= 3:
+            return f"{rel.parent.parent.name}/{rel.parent.name}/{rel.name}"
+        if len(rel.parts) == 2:
             return f"{rel.parent.name}/{rel.name}"
         return str(rel)
     except ValueError:
@@ -908,17 +912,20 @@ def _extract_directives(cf: ContextFile, doc: parse.ParsedDocument) -> list[tupl
                 directives.append((lineno, "neg", neg_tok, raw))
                 continue
 
-        is_neg = bool(DIRECTIVE_NEG_RE.search(raw))
-        raw_without_neg = DIRECTIVE_NEG_RE.sub(" ", raw) if is_neg else raw
-        is_pos = bool(DIRECTIVE_POS_RE.search(raw_without_neg))
-        if is_neg and not is_pos:
-            toks = _subject_tokens(raw)
-            if len(toks) >= 2:
-                directives.append((lineno, "neg", toks, raw))
-        elif is_pos and not is_neg:
-            toks = _subject_tokens(raw)
-            if len(toks) >= 2:
-                directives.append((lineno, "pos", toks, raw))
+        # Разделяем сложные правила вида "Используй X, никогда не Y" / "X — never Y" на клаузы
+        subclauses = [c.strip() for c in re.split(r"(?:,\s+|\s+[—–-]{1,2}\s+|;\s+)", raw) if c.strip()]
+        for clause in subclauses:
+            is_neg = bool(DIRECTIVE_NEG_RE.search(clause))
+            raw_without_neg = DIRECTIVE_NEG_RE.sub(" ", clause) if is_neg else clause
+            is_pos = bool(DIRECTIVE_POS_RE.search(raw_without_neg))
+            if is_neg and not is_pos:
+                toks = _subject_tokens(clause)
+                if len(toks) >= 2:
+                    directives.append((lineno, "neg", toks, raw))
+            elif is_pos and not is_neg:
+                toks = _subject_tokens(clause)
+                if len(toks) >= 2:
+                    directives.append((lineno, "pos", toks, raw))
     return directives
 
 
@@ -1002,7 +1009,7 @@ def check_rule_conflicts(
                         path=fa.path,
                         line=la,
                         message=f"противоречие с {_short_label(fb, base)}:{lb} — '{rawa[:60]}' vs '{rawb[:60]}'",
-                        hint="согласуй правило между AGENTS.md и CLAUDE.md",
+                        hint="согласуй правило между файлами инструкций проекта",
                     )
                 )
 

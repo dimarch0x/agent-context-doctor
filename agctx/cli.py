@@ -39,7 +39,7 @@ def _format_fix(f: FixRecord, root: Path) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="agctx",
-        description="Линтер файлов контекста ИИ-агентов: AGENTS.md, CLAUDE.md, SKILL.md.",
+        description="Линтер файлов контекста ИИ-агентов: AGENTS.md, CLAUDE.md, GEMINI.md, SKILL.md и rules/*.md.",
     )
     parser.add_argument("--version", action="version", version=f"agctx {__version__}")
     sub = parser.add_subparsers(dest="cmd", required=True)

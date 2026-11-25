@@ -49,8 +49,25 @@ HOME_SKIP_DIRS = {
 }
 
 
+RULES_PARENTS = {".agents", ".agent", ".claude", ".gemini"}
+
+
+def _classify_context_file(directory: Path, name: str) -> tuple[str, Path] | None:
+    """Определить (kind, scope) по каталогу и имени файла контекста."""
+    kind = KINDS.get(name)
+    if kind:
+        if directory.name == "rules" and directory.parent.name in RULES_PARENTS:
+            return kind, directory.parent.parent
+        return kind, directory
+    if directory.name == ".gemini" and name == "gemini.md":
+        return "gemini", directory
+    if directory.name == "rules" and directory.parent.name in RULES_PARENTS and name.endswith(".md"):
+        return "rules", directory.parent.parent
+    return None
+
+
 def discover(root: Path, follow_home: bool = False) -> list[ContextFile]:
-    """Найти все AGENTS.md/CLAUDE.md/SKILL.md под root.
+    """Найти файлы контекста (AGENTS.md, CLAUDE.md, GEMINI.md, SKILL.md, rules/*.md) под root.
 
     При обходе домашнего каталога без follow_home=True пропускает тяжёлые системные кэши.
     """
@@ -67,10 +84,11 @@ def discover(root: Path, follow_home: bool = False) -> list[ContextFile]:
         dirnames[:] = sorted(d for d in dirnames if d not in skip and not d.startswith(".cache"))
         d = Path(dirpath)
         for name in filenames:
-            kind = KINDS.get(name)
-            if not kind:
+            classified = _classify_context_file(d, name)
+            if not classified:
                 continue
-            found.append(ContextFile(path=d / name, kind=kind, scope=d))
+            kind, scope = classified
+            found.append(ContextFile(path=d / name, kind=kind, scope=scope))
     return sorted(found, key=lambda c: str(c.path))
 
 

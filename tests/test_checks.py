@@ -289,5 +289,28 @@ class EmptyDirTests(unittest.TestCase):
             self.assertIn("out/", empty[0].message)
 
 
+class MultiHarnessFormatTests(unittest.TestCase):
+    def test_gemini_md_and_rules_dir_use_project_scope(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "src").mkdir()
+            write(root, "GEMINI.md", "## Стек\n- Используем uv для зависимостей.\n")
+            write(root, ".agents/rules/python.md", "## Стек\n- Используем pip для зависимостей.\nСмотри `src/missing.py`.\n")
+            write(root, ".claude/rules/local.md", "Обычное правило без конфликта.\n")
+            files, issues = scan(root)
+            self.assertEqual(len(files), 3)
+            self.assertTrue(all(f.scope == root for f in files))
+            self.assertTrue(any(i.check == "rule-conflict" for i in issues))
+            self.assertTrue(any(i.check == "dead-path" and i.severity == "error" for i in issues))
+
+    def test_trailing_never_clause_does_not_invert_positive_rule(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "AGENTS.md", "- ALWAYS use environment variables or a secret manager\n")
+            write(root, ".agents/rules/sec.md", "- Load secrets from environment variables or a secret manager, never from committed files.\n")
+            _, issues = scan(root)
+            self.assertFalse([i for i in issues if i.check == "rule-conflict"])
+
+
 if __name__ == "__main__":
     unittest.main()

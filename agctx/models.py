@@ -5,7 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-KINDS = {"AGENTS.md": "agents", "CLAUDE.md": "claude", "SKILL.md": "skill"}
+KINDS = {
+    "AGENTS.md": "agents",
+    "AGENTS.local.md": "agents",
+    "CLAUDE.md": "claude",
+    "CLAUDE.local.md": "claude",
+    "GEMINI.md": "gemini",
+    "SKILL.md": "skill",
+}
 
 SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
 
