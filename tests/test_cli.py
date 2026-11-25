@@ -98,6 +98,15 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertIn("rule-conflict", out)
 
+    def test_check_empty_dir_filter(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "templates").mkdir()
+            write(root, "AGENTS.md", "Копируй шаблоны из `templates/`.\n")
+            code, out = self.run_cli("scan", str(root), "--check", "empty-dir")
+            self.assertEqual(code, 1)
+            self.assertIn("empty-dir", out)
+
 
 if __name__ == "__main__":
     unittest.main()

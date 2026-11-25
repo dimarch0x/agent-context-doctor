@@ -23,6 +23,7 @@ CHECKS = (
     "skill-frontmatter",
     "duplicate-rule",
     "rule-conflict",
+    "empty-dir",
 )
 
 BULLET_RE = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
@@ -117,6 +118,8 @@ class _ScanCache:
         self.home = home
         self._exists: dict[Path, bool] = {}
         self._is_file: dict[Path, bool] = {}
+        self._is_dir: dict[Path, bool] = {}
+        self._dir_has_files: dict[Path, bool] = {}
         self._nearest: dict[tuple[Path, str], Path | None] = {}
         self._pkg: dict[Path, dict] = {}
         self._pyproj: dict[Path, dict[str, str]] = {}
@@ -142,6 +145,30 @@ class _ScanCache:
             except OSError:
                 val = False
             self._is_file[path] = val
+        return val
+
+    def is_dir(self, path: Path) -> bool:
+        val = self._is_dir.get(path)
+        if val is None:
+            try:
+                val = path.is_dir()
+            except OSError:
+                val = False
+            self._is_dir[path] = val
+        return val
+
+    def dir_has_files(self, path: Path) -> bool:
+        val = self._dir_has_files.get(path)
+        if val is None:
+            val = False
+            try:
+                for _, _, filenames in os.walk(path):
+                    if filenames:
+                        val = True
+                        break
+            except OSError:
+                val = False
+            self._dir_has_files[path] = val
         return val
 
     def nearest(self, scope: Path, filename: str) -> Path | None:
@@ -1133,6 +1160,46 @@ def apply_fixes(
     return fixes
 
 
+def check_empty_dirs(
+    files: list[ContextFile],
+    texts: dict[Path, str],
+    root: Path,
+    home: Path,
+    cache: _ScanCache | None = None,
+) -> list[Issue]:
+    """Каталог существует на диске, но не содержит ни одного файла (включая вложенные)."""
+    sc = cache or _ScanCache(root, home)
+    issues: list[Issue] = []
+    seen: set[tuple[Path, int, Path]] = set()
+    for f in files:
+        text = texts.get(f.path, "")
+        doc = sc.doc(f.path, text)
+        lines = doc.lines
+        for lineno, start_col, end_col, token in parse.code_spans_with_pos(text, doc):
+            if parse.parse_path_ref(token) is None:
+                continue
+            resolved = sc.resolve(token, f.scope)
+            if not sc.is_dir(resolved) or sc.dir_has_files(resolved):
+                continue
+            key = (f.path, lineno, resolved)
+            if key in seen:
+                continue
+            seen.add(key)
+            line_text = lines[lineno - 1] if 0 <= lineno - 1 < len(lines) else ""
+            severity = "info" if _has_create_intent(line_text, start_col, end_col) else "warning"
+            issues.append(
+                Issue(
+                    check="empty-dir",
+                    severity=severity,
+                    path=f.path,
+                    line=lineno,
+                    message=f"каталог пуст: {token}",
+                    hint=f"проверено как {resolved}",
+                )
+            )
+    return issues
+
+
 def scan(
     root: Path,
     home: Path | None = None,
@@ -1161,4 +1228,6 @@ def scan(
         issues += check_duplicate_rules(files, texts, root=root, cache=sc)
     if "rule-conflict" in selected:
         issues += check_rule_conflicts(files, texts, root=root, cache=sc)
+    if "empty-dir" in selected:
+        issues += check_empty_dirs(files, texts, root, home, cache=sc)
     return files, sorted(issues, key=lambda i: i.sort_key())

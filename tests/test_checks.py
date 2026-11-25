@@ -264,5 +264,30 @@ class RuleConflictTests(unittest.TestCase):
             self.assertIn("php-architecture", conflicts[0].message)
 
 
+class EmptyDirTests(unittest.TestCase):
+    def test_empty_dir_and_nested_empty_subdir_warn(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "empty_parent" / "skills").mkdir(parents=True)
+            write(root, "AGENTS.md", "Бери скиллы из `empty_parent/` и `empty_parent/skills/`.\n")
+            _, issues = scan(root)
+            empty = [i for i in issues if i.check == "empty-dir"]
+            self.assertEqual(len(empty), 2)
+            self.assertTrue(all(i.severity == "warning" for i in empty))
+
+    def test_non_empty_dir_is_clean_and_create_intent_is_info(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "populated" / "sub").mkdir(parents=True)
+            (root / "populated" / "sub" / "a.txt").write_text("ok", encoding="utf-8")
+            (root / "out").mkdir()
+            write(root, "AGENTS.md", "Скиллы в `populated/`. Создай каталог `out/`.\n")
+            _, issues = scan(root)
+            empty = [i for i in issues if i.check == "empty-dir"]
+            self.assertEqual(len(empty), 1)
+            self.assertEqual(empty[0].severity, "info")
+            self.assertIn("out/", empty[0].message)
+
+
 if __name__ == "__main__":
     unittest.main()

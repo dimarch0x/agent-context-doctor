@@ -23,6 +23,7 @@
 | `skill-frontmatter` | нет frontmatter, `name` ≠ каталог, битые ссылки на `scripts/` | error / warning |
 | `duplicate-rule` | одно правило в нескольких файлах — разойдётся | info |
 | `rule-conflict` | противоречия между `AGENTS.md` и `CLAUDE.md` (полярность и стек) | warning |
+| `empty-dir` | каталог из правил существует, но пуст (0 файлов внутри) | warning |
 
 Серьёзность выводится из факта, а не из догадки: файл пропал из существующего каталога —
 ошибка; каталог не существует, но предок есть — предупреждение; не существует ничего,
@@ -48,21 +49,22 @@ python3 -m agctx scan . --fix            # применить безопасны
 
 | Корпус | Файлов | Ошибок | Предупреждений | Заметок | Время |
 |---|---|---|---|---|---|
-| `~/.dsh` (скиллы DSH) | 16 | 0 | 8 | 36 | ~0,15 с |
-| `~/.hermes/hermes-agent` (монорепо) | 223 | 13 | 189 | 554 | ~1,1 с |
-| `~/Projects` (рабочие проекты) | 41 | 5 | 9 | 46 | ~0,15 с |
+| `~/.dsh` (скиллы DSH) | 16 | 0 | 9 | 36 | ~0,15 с |
+| `~/.hermes/hermes-agent` (монорепо) | 223 | 13 | 189 | 554 | ~1,2 с |
+| `~/Projects` (рабочие проекты) | 41 | 0 | 3 | 47 | ~0,15 с |
 
 До настройки правил серьёзности тот же Hermes давал 188 ошибок и 568 предупреждений —
 почти всё это были API-роуты, примеры структуры проекта и пути чужих машин. Шум убирался
 правилами, а не списком исключений. Рост заметок на Hermes связан с включением проверки
-вложенных скиллов `skills/<category>/<name>/SKILL.md`, а в `~/Projects` дополнительно
-ловится конфликт архитектуры в `my-dialect-translator` (`AGENTS.md` vs `CLAUDE.md`).
+вложенных скиллов `skills/<category>/<name>/SKILL.md`; в `~/.dsh` добавилась проверка
+`empty-dir` на пустой `~/.agents/skills/`, а в `~/Projects` дополнительно ловится конфликт
+архитектуры в `my-dialect-translator` (`AGENTS.md` vs `CLAUDE.md`).
 
 Пример находки, которая пережила все фильтры:
 
 ```
-ERR  [dead-path] Project_NoName/adaptive-cachy-beauty/.agents/skills/agent-repo-init/SKILL.md:23
-     — путь не существует: /home/dmitry/AGENTS.md
+ERR  [dead-path] skills/network-diagnostics/SKILL.md:115
+     — путь не существует: ~/.config/kioslaverc
 ```
 
 ## Тесты
@@ -71,8 +73,8 @@ ERR  [dead-path] Project_NoName/adaptive-cachy-beauty/.agents/skills/agent-repo-
 python3 -m unittest discover -s tests -t . -v
 ```
 
-54 теста: разбор многострочного frontmatter, формальная грамматика путей, блоки кода,
-каждая проверка (включая `rule-conflict`), кластеры примеров, `--fix`, коды возврата и JSON.
+57 тестов: разбор многострочного frontmatter, формальная грамматика путей, блоки кода,
+все 7 проверок (включая `rule-conflict` и `empty-dir`), кластеры примеров, `--fix`, коды возврата и JSON.
 
 ## Ограничения
 
