@@ -15,5 +15,10 @@ keywords = ["agents", "agents.md", "mcp", "llm", "linter", "context"]
 [project.scripts]
 agctx = "agctx.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/dimarch0x/agent-context-doctor"
+Repository = "https://github.com/dimarch0x/agent-context-doctor"
+Issues = "https://github.com/dimarch0x/agent-context-doctor/issues"
+
 [tool.setuptools]
 packages = ["agctx"]

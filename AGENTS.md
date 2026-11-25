@@ -5,7 +5,7 @@ CLI-линтер файлов контекста ИИ-агентов. Python 3.1
 ## Структура
 
 - `agctx/parse.py` — разбор markdown: frontmatter, инлайн-код, команды, версии.
-- `agctx/discover.py` — обход дерева и поиск `AGENTS.md`, `CLAUDE.md`, `SKILL.md`.
+- `agctx/discover.py` — обход дерева и поиск `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `SKILL.md` и `rules/*.md`.
 - `agctx/checks.py` — семь проверок (`dead-path`, `dead-command`, `version-drift`, `skill-frontmatter`, `duplicate-rule`, `rule-conflict`, `empty-dir`), правила серьёзности, кеш прогона и `--fix`.
 - `agctx/cli.py` — интерфейс, вывод, коды возврата.
 - `tests/` — unittest, без внешних зависимостей.
