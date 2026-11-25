@@ -24,6 +24,16 @@ class ContextFile:
 
 
 @dataclass(frozen=True)
+class PathRef:
+    """Классифицированная ссылка на файловый путь."""
+
+    raw: str
+    normalized: str
+    anchor: str  # home | abs | rel_explicit | rel_bare
+    is_dir: bool
+
+
+@dataclass(frozen=True)
 class Issue:
     """Одна находка линтера."""
 
@@ -36,3 +46,14 @@ class Issue:
 
     def sort_key(self) -> tuple:
         return (SEVERITY_ORDER.get(self.severity, 9), str(self.path), self.line or 0)
+
+
+@dataclass(frozen=True)
+class FixRecord:
+    """Запись об автоисправлении."""
+
+    check: str
+    path: Path
+    line: int
+    description: str
+    applied: bool = True

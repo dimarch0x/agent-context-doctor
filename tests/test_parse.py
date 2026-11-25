@@ -18,6 +18,35 @@ class FrontmatterTests(unittest.TestCase):
         self.assertEqual(meta, {})
         self.assertEqual(body_start, 0)
 
+    def test_multiline_scalars_lists_and_nested_keys(self):
+        text = (
+            "---\r\n"
+            "name: demo\r\n"
+            "description: >-\r\n"
+            "  Use when checking\r\n"
+            "  multiline YAML.\r\n"
+            "platforms: [linux, macos]\r\n"
+            "triggers:\r\n"
+            "  - first trigger\r\n"
+            "  - \"second: trigger\"\r\n"
+            "metadata:\r\n"
+            "  author:\r\n"
+            "    name: Nested Author\r\n"
+            "---\r\n"
+        )
+        meta, body_start = parse.parse_frontmatter(text)
+        self.assertEqual(meta["name"], "demo")
+        self.assertEqual(meta["description"], "Use when checking multiline YAML.")
+        self.assertEqual(meta["platforms"], ["linux", "macos"])
+        self.assertEqual(meta["triggers"], ["first trigger", "second: trigger"])
+        self.assertEqual(meta["metadata"]["author"]["name"], "Nested Author")
+        self.assertGreater(body_start, 0)
+
+    def test_empty_frontmatter_keeps_body_start(self):
+        meta, body_start = parse.parse_frontmatter("---\n---\nBody\n")
+        self.assertEqual(meta, {})
+        self.assertEqual(body_start, 2)
+
 
 class CodeSpanTests(unittest.TestCase):
     def test_spans_with_line_numbers(self):
@@ -29,6 +58,11 @@ class CodeSpanTests(unittest.TestCase):
     def test_ignores_double_backticks(self):
         text = "``not a span``\n"
         self.assertEqual(parse.code_spans(text), [])
+
+    def test_ignores_fenced_code_blocks_and_frontmatter(self):
+        text = "---\nname: demo\ndesc: `front/path.py`\n---\n```ts\nconst x = `tpl/file.ts`;\n```\nReal `src/app.py`\n"
+        spans = parse.code_spans(text)
+        self.assertEqual(spans, [(8, "src/app.py")])
 
 
 class PathHeuristicTests(unittest.TestCase):
@@ -50,6 +84,11 @@ class CommandTests(unittest.TestCase):
         cmds = [c for _, c in parse.commands(text)]
         self.assertTrue(any(c.startswith("npm run build") for c in cmds))
         self.assertTrue(any(c.startswith("make test") for c in cmds))
+
+    def test_ignores_prose_make_and_extracts_shell_fence(self):
+        text = "Always make sure tests pass.\n```bash\nmake lint\n```\n```python\nmake_it()\n```\n"
+        cmds = [c for _, c in parse.commands(text)]
+        self.assertEqual(cmds, ["make lint"])
 
 
 class VersionTests(unittest.TestCase):
@@ -83,6 +122,32 @@ class NoiseFilterTests(unittest.TestCase):
             (home / "a" / "b" / "c.conf").write_text("x")
             got = parse.resolve_path("~/a/b/c.conf", home, home, home)
             self.assertTrue(got.exists())
+
+    def test_dot_prefixes_preserved_by_clean_token(self):
+        self.assertEqual(parse.clean_token("./scripts/a.py"), "./scripts/a.py")
+        self.assertEqual(parse.clean_token("../foo/bar.py"), "../foo/bar.py")
+        self.assertEqual(parse.clean_token(".claude/evals/x.md"), ".claude/evals/x.md")
+        self.assertEqual(parse.clean_token(".work/shot.mjs"), ".work/shot.mjs")
+        self.assertEqual(parse.clean_token("src/a.py."), "src/a.py")
+        self.assertTrue(parse.looks_like_path("./scripts/a.py"))
+        self.assertTrue(parse.looks_like_path(".claude/evals/x.md"))
+
+    def test_formal_grammar_rejects_model_ids_and_semver_leaves(self):
+        self.assertFalse(parse.looks_like_path("openrouter/anthropic/claude-sonnet-4.5"))
+        self.assertFalse(parse.looks_like_path("/org/project/v1.2.0"))
+        self.assertFalse(parse.looks_like_path("tools/bot_mode_probe._roster"))
+
+    def test_resolve_relative_does_not_fallback_to_home(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            home = base / "home"
+            proj = base / "proj"
+            (home / "src").mkdir(parents=True)
+            (home / "src" / "main.py").write_text("x")
+            proj.mkdir()
+            got = parse.resolve_path("src/main.py", proj, proj, home)
+            self.assertFalse(got.exists())
+            self.assertEqual(got, proj / "src" / "main.py")
 
 
 if __name__ == "__main__":

@@ -37,6 +37,36 @@ class DeadPathTests(unittest.TestCase):
             _, issues = scan(root)
             self.assertFalse([i for i in issues if i.check == "dead-path"])
 
+    def test_relative_dot_slash_in_existing_dir_is_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "src").mkdir()
+            write(root, "AGENTS.md", "Смотри `./src/missing.py`\n")
+            _, issues = scan(root)
+            dead = [i for i in issues if i.check == "dead-path"]
+            self.assertEqual(len(dead), 1)
+            self.assertEqual(dead[0].severity, "error")
+            self.assertTrue(dead[0].hint.endswith("src/missing.py"))
+
+    def test_copy_source_before_destination_is_not_downgraded(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "src").mkdir()
+            write(root, "AGENTS.md", "Взять `src/missing.md` и положить в корень проекта.\n")
+            _, issues = scan(root)
+            dead = [i for i in issues if i.check == "dead-path"]
+            self.assertEqual(len(dead), 1)
+            self.assertEqual(dead[0].severity, "error")
+
+    def test_negated_create_is_not_downgraded(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "src").mkdir()
+            write(root, "AGENTS.md", "Не создавай `src/missing.py`.\n")
+            _, issues = scan(root)
+            dead = [i for i in issues if i.check == "dead-path"]
+            self.assertEqual(dead[0].severity, "error")
+
 
 class ExampleClusterTests(unittest.TestCase):
     def test_example_tree_cluster_becomes_info(self):
@@ -47,6 +77,16 @@ class ExampleClusterTests(unittest.TestCase):
             dead = [i for i in issues if i.check == "dead-path"]
             self.assertEqual(len(dead), 3)
             self.assertTrue(all(i.severity == "info" for i in dead))
+
+    def test_cluster_inside_existing_dir_stays_error(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "src").mkdir()
+            write(root, "AGENTS.md", "`src/a.py`\n`src/b.py`\n`src/c.py`\n")
+            _, issues = scan(root)
+            dead = [i for i in issues if i.check == "dead-path"]
+            self.assertEqual(len(dead), 3)
+            self.assertTrue(all(i.severity == "error" for i in dead))
 
 
 class DeadCommandTests(unittest.TestCase):
@@ -63,6 +103,14 @@ class DeadCommandTests(unittest.TestCase):
             root = Path(td)
             write(root, "package.json", json.dumps({"name": "demo", "version": "1.0.0", "scripts": {"build": "tsc"}}))
             write(root, "AGENTS.md", "Запускай `npm run build`\n")
+            _, issues = scan(root)
+            self.assertFalse([i for i in issues if i.check == "dead-command"])
+
+    def test_placeholder_and_wildcard_commands_ignored(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "package.json", json.dumps({"name": "demo", "version": "1.0.0", "scripts": {"lint:js": "eslint"}}))
+            write(root, "AGENTS.md", "Run `python3 /path/to/recalc.py` and `npm run lint:*`.\n")
             _, issues = scan(root)
             self.assertFalse([i for i in issues if i.check == "dead-command"])
 
@@ -83,6 +131,37 @@ class VersionDriftTests(unittest.TestCase):
             root = Path(td)
             write(root, "pyproject.toml", '[project]\nname = "demo"\nversion = "1.2.0"\n')
             write(root, "AGENTS.md", "Проект demo, версия 1.2.0\n")
+            _, issues = scan(root)
+            self.assertFalse([i for i in issues if i.check == "version-drift"])
+
+    def test_header_version_and_runtime_drift(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "pyproject.toml", '[project]\nname = "demo"\nversion = "1.2.0"\nrequires-python = ">=3.11"\n')
+            write(root, "AGENTS.md", "# demo\nВерсия: 1.0.0\nСтек: Python 3.9+\n")
+            _, issues = scan(root)
+            drift = [i for i in issues if i.check == "version-drift"]
+            self.assertEqual(len(drift), 2)
+
+    def test_cross_file_runtime_drift(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "pyproject.toml", '[project]\nname = "demo"\nversion = "1.2.0"\nrequires-python = ">=3.10"\n')
+            write(root, "AGENTS.md", "Стек: Python 3.10+\n")
+            write(root, "CLAUDE.md", "Стек: Python 3.12+\n")
+            _, issues = scan(root)
+            drift = [i for i in issues if i.check == "version-drift"]
+            self.assertTrue(any("CLAUDE.md" in i.message for i in drift))
+
+    def test_upstream_url_and_subdir_name_not_flagged(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "pyproject.toml", '[project]\nname = "hermes"\nversion = "0.0.0"\n')
+            write(
+                root,
+                "skills/creative/humanizer/SKILL.md",
+                "---\nname: humanizer\ndescription: Use when editing\n---\nRepo: https://github.com/x/humanizer (version 2.5.1)\n",
+            )
             _, issues = scan(root)
             self.assertFalse([i for i in issues if i.check == "version-drift"])
 
@@ -126,6 +205,22 @@ class SkillFrontmatterTests(unittest.TestCase):
             _, issues = scan(root)
             self.assertFalse([i for i in issues if i.check == "skill-frontmatter"])
 
+    def test_nested_category_skill_and_multiline_yaml(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(
+                root,
+                "skills/cat/demo/SKILL.md",
+                "---\nname: wrong\ndescription: >\n  Use when testing\n---\nUse `scripts/.cache/` and `scripts/missing.py`.\n",
+            )
+            (root / "skills/cat/demo/scripts").mkdir(parents=True)
+            _, issues = scan(root)
+            fm = [i for i in issues if i.check == "skill-frontmatter"]
+            self.assertTrue(any(i.severity == "warning" and "wrong" in i.message for i in fm))
+            self.assertTrue(any(i.severity == "error" and "scripts/missing.py" in i.message for i in fm))
+            self.assertFalse(any("scripts/.cache/" in i.message for i in fm))
+            self.assertFalse(any("Use when" in i.message for i in fm))
+
 
 class DuplicateRuleTests(unittest.TestCase):
     def test_same_rule_in_two_files_is_info(self):
@@ -136,6 +231,37 @@ class DuplicateRuleTests(unittest.TestCase):
             write(root, "sub/AGENTS.md", rule)
             _, issues = scan(root)
             self.assertTrue(any(i.check == "duplicate-rule" for i in issues))
+
+    def test_ignores_frontmatter_and_fenced_blocks(self):
+        fm = "---\nname: s1\ndescription: Use when testing\nplatforms: [linux, macos, windows]\n---\n```bash\npytest -q --maxfail=1 --tb=short\n```\n"
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "skills/s1/SKILL.md", fm)
+            write(root, "skills/s2/SKILL.md", fm.replace("s1", "s2"))
+            _, issues = scan(root)
+            self.assertFalse([i for i in issues if i.check == "duplicate-rule"])
+
+
+class RuleConflictTests(unittest.TestCase):
+    def test_polarity_conflict_between_agents_and_claude(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "AGENTS.md", "- Не использовать bun run compile для быстрой итерации\n")
+            write(root, "CLAUDE.md", "- Всегда использовать bun run compile для быстрой итерации\n")
+            _, issues = scan(root)
+            conflicts = [i for i in issues if i.check == "rule-conflict"]
+            self.assertEqual(len(conflicts), 1)
+            self.assertEqual(conflicts[0].severity, "warning")
+
+    def test_exclusive_architecture_conflict(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "AGENTS.md", "## Паттерны\n- Clean Architecture: разделение слоёв.\n")
+            write(root, "CLAUDE.md", "## Архитектура\nПроект — процедурный PHP (без фреймворка).\n")
+            _, issues = scan(root)
+            conflicts = [i for i in issues if i.check == "rule-conflict"]
+            self.assertEqual(len(conflicts), 1)
+            self.assertIn("php-architecture", conflicts[0].message)
 
 
 if __name__ == "__main__":

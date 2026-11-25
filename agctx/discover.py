@@ -26,19 +26,45 @@ SKIP_DIRS = {
     "site-packages",
     ".idea",
     "target",
+    ".next",
+    ".nuxt",
+    ".turbo",
+    ".svelte-kit",
+    ".parcel-cache",
+    "coverage",
+    ".terraform",
+    "vendor",
+}
+
+HOME_SKIP_DIRS = {
+    ".local",
+    ".npm",
+    ".cargo",
+    ".rustup",
+    ".pyenv",
+    ".nvm",
+    "Library",
+    "snap",
+    ".Trash",
 }
 
 
 def discover(root: Path, follow_home: bool = False) -> list[ContextFile]:
     """Найти все AGENTS.md/CLAUDE.md/SKILL.md под root.
 
-    follow_home=True разрешает обход корня, если root — домашний каталог,
-    но всё равно пропускает тяжёлые служебные каталоги.
+    При обходе домашнего каталога без follow_home=True пропускает тяжёлые системные кэши.
     """
     root = root.resolve()
+    is_home_root = False
+    if not follow_home:
+        try:
+            is_home_root = root == Path.home().resolve()
+        except OSError:
+            is_home_root = False
     found: list[ContextFile] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".cache"))
+        skip = SKIP_DIRS | HOME_SKIP_DIRS if is_home_root and Path(dirpath) == root else SKIP_DIRS
+        dirnames[:] = sorted(d for d in dirnames if d not in skip and not d.startswith(".cache"))
         d = Path(dirpath)
         for name in filenames:
             kind = KINDS.get(name)

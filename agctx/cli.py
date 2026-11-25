@@ -8,24 +8,32 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .checks import scan
-from .models import Issue
+from .checks import CHECKS, apply_fixes, scan
+from .discover import load_text
+from .models import FixRecord, Issue
 
-CHECKS = ["dead-path", "dead-command", "version-drift", "skill-frontmatter", "duplicate-rule"]
-SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
+
+def _rel_path(path: Path, root: Path) -> Path:
+    try:
+        return path.relative_to(root)
+    except ValueError:
+        return path
 
 
 def _format_issue(i: Issue, root: Path) -> str:
-    try:
-        rel = i.path.relative_to(root)
-    except ValueError:
-        rel = i.path
+    rel = _rel_path(i.path, root)
     where = f"{rel}:{i.line}" if i.line else str(rel)
     mark = {"error": "ERR ", "warning": "WARN", "info": "INFO"}[i.severity]
     line = f"{mark} [{i.check}] {where} — {i.message}"
     if i.hint:
         line += f"\n         ↳ {i.hint}"
     return line
+
+
+def _format_fix(f: FixRecord, root: Path) -> str:
+    rel = _rel_path(f.path, root)
+    prefix = "FIX (dry-run)" if not f.applied else "FIX "
+    return f"{prefix} [{f.check}] {rel}:{f.line} — {f.description}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,9 +47,11 @@ def main(argv: list[str] | None = None) -> int:
     p_scan = sub.add_parser("scan", help="проверить дерево и вывести находки")
     p_scan.add_argument("path", nargs="?", default=".", help="корень обхода (по умолчанию .)")
     p_scan.add_argument("--json", action="store_true", help="машинный вывод")
-    p_scan.add_argument("--check", choices=CHECKS, action="append", help="только указанные проверки")
+    p_scan.add_argument("--check", choices=list(CHECKS), action="append", help="только указанные проверки")
     p_scan.add_argument("--quiet", action="store_true", help="только итоговая строка")
     p_scan.add_argument("--no-info", action="store_true", help="скрыть info-находки")
+    p_scan.add_argument("--fix", action="store_true", help="безопасно исправить детерминированные проблемы")
+    p_scan.add_argument("--dry-run", action="store_true", help="показать исправления от --fix без записи")
 
     args = parser.parse_args(argv)
 
@@ -50,17 +60,22 @@ def main(argv: list[str] | None = None) -> int:
         print(f"agctx: путь не найден: {root}", file=sys.stderr)
         return 3
 
-    files, issues = scan(root)
+    files, issues = scan(root, checks=args.check)
 
-    if args.check:
-        issues = [i for i in issues if i.check in set(args.check)]
+    fixes: list[FixRecord] = []
+    if args.fix:
+        texts = load_text(files)
+        fixes = apply_fixes(files, texts, issues, root, dry_run=args.dry_run)
+        if fixes and not args.dry_run:
+            files, issues = scan(root, checks=args.check)
+
     if args.no_info:
         issues = [i for i in issues if i.severity != "info"]
 
     counts = {s: sum(1 for i in issues if i.severity == s) for s in ("error", "warning", "info")}
 
     if args.json:
-        payload = {
+        payload: dict[str, object] = {
             "root": str(root),
             "files": [{"path": str(f.path), "kind": f.kind} for f in files],
             "summary": counts,
@@ -76,12 +91,25 @@ def main(argv: list[str] | None = None) -> int:
                 for i in issues
             ],
         }
+        if args.fix:
+            payload["fixes"] = [
+                {
+                    "check": fx.check,
+                    "path": str(fx.path),
+                    "line": fx.line,
+                    "description": fx.description,
+                    "applied": fx.applied,
+                }
+                for fx in fixes
+            ]
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         if not args.quiet:
+            for fx in fixes:
+                print(_format_fix(fx, root))
             for i in issues:
                 print(_format_issue(i, root))
-            if issues:
+            if fixes or issues:
                 print()
         print(
             f"Файлов контекста: {len(files)} | ошибок: {counts['error']} | "

@@ -70,6 +70,34 @@ class CliTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertIn("ошибок: 0", out)
 
+    def test_fix_dry_run_and_apply(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "pyproject.toml", '[project]\nname = "demo"\nversion = "2.0.0"\n')
+            write(root, "AGENTS.md", "Проект demo, версия 1.0.0\n")
+            skill = write(root, "skills/demo/SKILL.md", "---\nname: wrong\ndescription: Use when testing\n---\n")
+
+            code_dry, out_dry = self.run_cli("scan", str(root), "--fix", "--dry-run")
+            self.assertEqual(code_dry, 1)
+            self.assertIn("FIX (dry-run)", out_dry)
+            self.assertIn("name: wrong", skill.read_text(encoding="utf-8"))
+
+            code_fix, out_fix = self.run_cli("scan", str(root), "--fix", "--json")
+            self.assertEqual(code_fix, 0)
+            payload = json.loads(out_fix)
+            self.assertEqual(len(payload["fixes"]), 2)
+            self.assertIn("name: demo", skill.read_text(encoding="utf-8"))
+            self.assertIn("2.0.0", (root / "AGENTS.md").read_text(encoding="utf-8"))
+
+    def test_check_rule_conflict_filter(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            write(root, "AGENTS.md", "## Стек\n- Используем uv для зависимостей.\n")
+            write(root, "CLAUDE.md", "## Стек\n- Используем pip для зависимостей.\n")
+            code, out = self.run_cli("scan", str(root), "--check", "rule-conflict")
+            self.assertEqual(code, 1)
+            self.assertIn("rule-conflict", out)
+
 
 if __name__ == "__main__":
     unittest.main()
