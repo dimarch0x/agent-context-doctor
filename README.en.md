@@ -43,7 +43,8 @@ paths degrade to `info`.
 ## Install & Usage
 
 ```bash
-pip install .                        # or run directly: python3 -m agctx
+pip install agctx                    # from PyPI
+pip install .                        # from source                        # or run directly: python3 -m agctx
 python3 -m agctx scan .              # scan current repository
 python3 -m agctx scan ~/skills       # scan a skill collection
 python3 -m agctx scan . --json       # machine-readable JSON output

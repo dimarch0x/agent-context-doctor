@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agent-context-doctor"
-version = "0.1.0"
-description = "Linter for AI agent context files: AGENTS.md, CLAUDE.md, SKILL.md"
+name = "agctx"
+version = "0.1.1"
+description = "Linter for AI agent context files: AGENTS.md, CLAUDE.md, GEMINI.md, SKILL.md, rules/*.md"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

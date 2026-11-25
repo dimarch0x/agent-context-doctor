@@ -42,7 +42,8 @@ Python 3.10+, только стандартная библиотека, без �
 ## Установка и запуск
 
 ```bash
-pip install .                        # или запуск без установки: python3 -m agctx
+pip install agctx                    # из PyPI
+pip install .                        # из исходников
 python3 -m agctx scan .              # текущий каталог
 python3 -m agctx scan ~/skills       # корпус скиллов и AGENTS.md
 python3 -m agctx scan . --json       # машинный вывод
