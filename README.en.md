@@ -4,6 +4,7 @@
 
 [![CI](https://github.com/dimarch0x/agent-context-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/dimarch0x/agent-context-doctor/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![PyPI](https://img.shields.io/pypi/v/agctx.svg)](https://pypi.org/project/agctx/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A zero-dependency Python CLI linter for AI coding agent context files (`AGENTS.md`,
